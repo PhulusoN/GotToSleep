@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="IMANI.jpg">
+  <title>Goodnight</title>
+
+  <style>
+    :root {
+      --page-bg:     #000000;
+      --page-text:   #ffffff;
+      --card-bg:     #111111;
+      --accent:      #ff5c85;
+      --muted:       #9a9a9a;
+      --on-accent:   #000000;
+      --morph-time:  650ms;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+      overflow-x: hidden;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+
+      background: var(--page-bg);
+      color: var(--page-text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .cards-left {
+      min-height: 1.2em;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    button {
+      padding: 10px 22px;
+      font: inherit;
+      color: var(--accent);
+      background: transparent;
+      border: 2px solid var(--accent);
+      border-radius: 999px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      color: var(--page-bg);
+      background: var(--accent);
+    }
+
+    .stack {
+      position: relative;
+      width: min(240px, 70vw);
+      aspect-ratio: 3 / 4;
+    }
+
+    .card {
+      position: absolute;
+      inset: 0;
+      cursor: pointer;
+      user-select: none;
+      will-change: transform;
+      transform:
+        translateY(calc(var(--depth) * 10px))
+        rotate(calc(var(--depth) * 2.5deg))
+        scale(calc(1 - var(--depth) * 0.03));
+      transition: transform 0.3s ease;
+      z-index: calc(10 - var(--depth));
+      filter:
+        drop-shadow( 1.5px 0     0 var(--accent))
+        drop-shadow(-1.5px 0     0 var(--accent))
+        drop-shadow( 0     1.5px 0 var(--accent))
+        drop-shadow( 0    -1.5px 0 var(--accent))
+        drop-shadow( 0     8px 10px rgba(255, 92, 133, 0.2));
+    }
+
+    .card:not(.is-top) {
+      cursor: default;
+    }
+
+    .card.is-top:not(.is-leaving):hover {
+      transform: translateY(-6px) scale(1.02);
+    }
+
+    .card-face {
+      position: absolute;
+      inset: 0;
+      padding: 20px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--card-bg);
+
+      transition:
+        clip-path        var(--morph-time) cubic-bezier(0.45, 0.05, 0.55, 0.95),
+        background-color var(--morph-time) ease-in-out,
+        color            var(--morph-time) ease-in-out;
+    }
+
+    .card.is-leaving {
+      pointer-events: none;
+      z-index: 30;
+      transition: transform var(--morph-time) cubic-bezier(0.45, 0.05, 0.55, 0.95);
+      transform: translateY(-8px) scale(1.06);
+    }
+
+    .card.is-leaving .card-face {
+      color: var(--on-accent);
+      background: var(--accent);
+    }
+
+    .card.is-vanishing {
+      animation: heartbeat-and-vanish 0.5s ease-in-out forwards;
+    }
+
+    @keyframes heartbeat-and-vanish {
+      0%   { transform: translateY(-8px) scale(1.06); }
+      25%  { transform: translateY(-8px) scale(1.25); }
+      45%  { transform: translateY(-8px) scale(1.1); }
+      100% { transform: translateY(-8px) scale(0) rotate(12deg); opacity: 0; }
+    }
+
+    .burst-heart {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      z-index: 50;
+      font-size: 1.4rem;
+      color: var(--accent);
+      pointer-events: none;
+      animation: fly-out 0.9s ease-out forwards;
+    }
+
+    @keyframes fly-out {
+      from {
+        transform: translate(-50%, -50%) scale(0.4);
+        opacity: 1;
+      }
+      to {
+        transform: translate(calc(-50% + var(--move-x)), calc(-50% + var(--move-y))) scale(1.2);
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Tap 
+    
+  </h1>
+
+  <div class="stack" id="stack"></div>
+  <div class="cards-left" id="cardsLeft"></div>
+  <button id="resetButton">Start over</button>
+
+  <script>
+    const WORD_SETS = [
+      ["Goonight", "My beatiful", "Lady", "Sleep tight", "Forehead kisses"],
+      ["Avha", "Adele", "Vho mme", "Mudau", "Goodnight"],
+    ];
+
+    const CARD_CORNER_RADIUS = 20;
+    const SHAPE_POINTS = 200;
+    const MORPH_TIME = 650;
+    const BEAT_TIME = 500;
+
+    document.documentElement.style.setProperty("--morph-time", MORPH_TIME + "ms");
+
+    const stackElement = document.getElementById("stack");
+    const cardsLeftElement = document.getElementById("cardsLeft");
+    const resetButton = document.getElementById("resetButton");
+
+    let cards = [];
+    let setIndex = 0;
+
+    function pickEvenlySpacedPoints(path) {
+      const distanceAtPoint = [0];
+      for (let i = 1; i < path.length; i++) {
+        const dx = path[i][0] - path[i - 1][0];
+        const dy = path[i][1] - path[i - 1][1];
+        distanceAtPoint.push(distanceAtPoint[i - 1] + Math.hypot(dx, dy));
+      }
+      const totalLength = distanceAtPoint[distanceAtPoint.length - 1];
+
+      const result = [];
+      let segment = 1;
+      for (let i = 0; i < SHAPE_POINTS; i++) {
+        const targetDistance = (totalLength * i) / SHAPE_POINTS;
+
+        while (distanceAtPoint[segment] < targetDistance) {
+          segment++;
+        }
+
+        const segmentLength = distanceAtPoint[segment] - distanceAtPoint[segment - 1];
+        const progress = (targetDistance - distanceAtPoint[segment - 1]) / (segmentLength || 1);
+
+        const [x1, y1] = path[segment - 1];
+        const [x2, y2] = path[segment];
+        result.push([x1 + (x2 - x1) * progress, y1 + (y2 - y1) * progress]);
+      }
+      return result;
+    }
+
+    function getRoundedRectanglePoints(width, height, radius) {
+      const path = [[width / 2, 0], [width - radius, 0]];
+
+      function addCorner(centerX, centerY, startAngle) {
+        for (let step = 1; step <= 12; step++) {
+          const angle = startAngle + (Math.PI / 2) * (step / 12);
+          path.push([
+            centerX + radius * Math.cos(angle),
+            centerY + radius * Math.sin(angle)
+          ]);
+        }
+      }
+
+      addCorner(width - radius, radius, -Math.PI / 2);
+      path.push([width, height - radius]);
+      addCorner(width - radius, height - radius, 0);
+      path.push([radius, height]);
+      addCorner(radius, height - radius, Math.PI / 2);
+      path.push([0, radius]);
+      addCorner(radius, radius, Math.PI);
+      path.push([width / 2, 0]);
+
+      return pickEvenlySpacedPoints(path);
+    }
+
+    function getHeartPoints(width, height) {
+      const denseSteps = 800;
+      const rawPoints = [];
+      for (let i = 0; i <= denseSteps; i++) {
+        const t = (Math.PI * 2 * i) / denseSteps;
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = 13 * Math.cos(t)
+                - 5  * Math.cos(2 * t)
+                - 2  * Math.cos(3 * t)
+                -      Math.cos(4 * t);
+        rawPoints.push([x, y]);
+      }
+
+      const allX = rawPoints.map(p => p[0]);
+      const allY = rawPoints.map(p => p[1]);
+      const minX = Math.min(...allX), maxX = Math.max(...allX);
+      const minY = Math.min(...allY), maxY = Math.max(...allY);
+
+      const scale   = (width * 0.98) / (maxX - minX);
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      const fitted = rawPoints.map(([x, y]) => [
+        width  / 2 + (x - centerX) * scale,
+        height / 2 - (y - centerY) * scale
+      ]);
+
+      return pickEvenlySpacedPoints(fitted);
+    }
+
+    function toClipPath(points) {
+      const pairs = points.map(([x, y]) => x.toFixed(1) + "px " + y.toFixed(1) + "px");
+      return "polygon(" + pairs.join(", ") + ")";
+    }
+
+    function updateCardShapes(card) {
+      const width = card.offsetWidth;
+      const height = card.offsetHeight;
+
+      card.rectangleShape = toClipPath(getRoundedRectanglePoints(width, height, CARD_CORNER_RADIUS));
+      card.heartShape = toClipPath(getHeartPoints(width, height));
+
+      const face = card.firstChild;
+      face.style.clipPath = card.classList.contains("is-leaving")
+        ? card.heartShape
+        : card.rectangleShape;
+    }
+
+    function updateStackLayout() {
+      cards.forEach((card, index) => {
+        card.style.setProperty("--depth", index);
+        card.classList.toggle("is-top", index === 0);
+      });
+
+      if (cards.length === 0) {
+        cardsLeftElement.textContent = "Bye";
+      } else {
+        cardsLeftElement.textContent = cards.length + (cards.length === 1 ? " card left" : " cards left");
+      }
+    }
+
+    function buildStack() {
+      stackElement.innerHTML = "";
+
+      cards = WORD_SETS[setIndex].map(word => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const face = document.createElement("div");
+        face.className = "card-face";
+        face.textContent = word;
+
+        card.appendChild(face);
+        stackElement.appendChild(card);
+
+        card.addEventListener("click", () => tapCard(card));
+        updateCardShapes(card);
+        return card;
+      });
+
+      updateStackLayout();
+    }
+
+    function tapCard(card) {
+      if (card !== cards[0]) return;
+
+      cards.shift();
+      updateStackLayout();
+
+      card.classList.add("is-leaving");
+      card.firstChild.style.clipPath = card.heartShape;
+
+      setTimeout(() => {
+        card.classList.add("is-vanishing");
+        spawnBurstHearts();
+        setTimeout(() => card.remove(), BEAT_TIME);
+      }, MORPH_TIME);
+    }
+
+    function spawnBurstHearts() {
+      const count = 8;
+
+      for (let i = 0; i < count; i++) {
+        const heart = document.createElement("span");
+        heart.className = "burst-heart";
+        heart.textContent = "♥";
+
+        const angle = (Math.PI * 2 / count) * i + Math.random() * 0.5;
+        const distance = 100 + Math.random() * 60;
+        heart.style.setProperty("--move-x", Math.cos(angle) * distance + "px");
+        heart.style.setProperty("--move-y", Math.sin(angle) * distance + "px");
+
+        stackElement.appendChild(heart);
+        setTimeout(() => heart.remove(), 950);
+      }
+    }
+
+    resetButton.addEventListener("click", () => {
+      setIndex = (setIndex + 1) % WORD_SETS.length;
+      buildStack();
+    });
+
+    window.addEventListener("resize", () => {
+      stackElement.querySelectorAll(".card").forEach(updateCardShapes);
+    });
+
+    buildStack();
+  </script>
+</body>
+</html>
